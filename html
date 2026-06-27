@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ultimate IoT Smart Irrigation Dashboard (Vacation Predictor)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Left Panel: IoT Control UI */
+        .control-panel { width: 400px; background: #ffffff; border-right: 2px solid #e0e5ec; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 4px 0 15px rgba(0,0,0,0.05); z-index: 10; overflow-y: auto; }
+        .panel-title { font-size: 24px; font-weight: bold; color: #111111; margin: 0 0 5px 0; letter-spacing: 0.5px; }
+        
+        /* Buttons */
+        .btn-generate { background-color: #007aff; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 10px; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-generate:hover { background-color: #0063cc; }
+
+        .btn-sim { background-color: #5856d6; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 10px; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
+        .btn-sim:hover { background-color: #4341b7; }
+        .btn-sim.active { background-color: #ff9500; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3); }
+
+        .btn-refill { background-color: #34c759; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 10px; cursor: pointer; }
+        .btn-refill:hover { background-color: #28a745; }
+
+        /* 🌴 Vacation Box Styling */
+        .vacation-box { background: #fff9e6; border: 2px dashed #ff9500; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .btn-predict { background-color: #ff9500; color: white; border: none; padding: 10px; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+        .btn-predict:hover { background-color: #e08200; }
+        .predict-result { font-size: 13px; font-weight: bold; color: #b26a00; line-height: 1.4; }
+
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-weight: 600; color: #444444; font-size: 14px; }
+        .form-group input, .form-group select { padding: 11px; border: 2px solid #ccd4e0; border-radius: 8px; font-size: 15px; width: 100%; background: #fcfdfe; }
+        
+        .water-status { font-size: 14px; font-weight: 600; color: #34c759; display: flex; align-items: center; gap: 6px; margin-top: -4px; }
+        .water-status.alert { color: #ff3b30; background: #ffebeb; padding: 8px; border-radius: 6px; border: 1px solid #ffccd0; width: 100%; }
+        .status-indicator { font-size: 14px; font-weight: 600; color: #666666; margin: 3px 0; display: flex; align-items: center; gap: 8px; }
+        
+        /* 📊 Water Level Bar Chart */
+        .chart-container { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+        .chart-title { font-size: 13px; font-weight: bold; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
+        .bar-wrapper { background: #e2e8f0; width: 100%; height: 24px; border-radius: 6px; overflow: hidden; position: relative; }
+        .bar-fill { background: #007aff; width: 100%; height: 100%; transition: width 0.1s ease, background-color 0.3s; }
+        .bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; color: #1e293b; }
+
+        /* Right Side: 3D Scene Viewport */
+        .canvas-container { flex: 1; position: relative; background: #ffffff; }
+        #canvas-tip { position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; pointer-events: none; font-weight: 500; z-index: 5; }
+        
+        /* Telemetry Overlay */
+        #info-overlay { position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.95); border: 2px solid #222; padding: 12px; border-radius: 12px; font-family: monospace; font-size: 14px; font-weight: bold; color: #333; box-shadow: 0 6px 20px rgba(0,0,0,0.15); z-index: 5; width: 220px; }
+
+        /* 🕒 24H Interactive Timeline Overlay */
+        #timeline-container { position: absolute; bottom: 20px; left: 20px; right: 20px; background: rgba(255,255,255,0.95); border: 2px solid #222; border-radius: 14px; padding: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.2); z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+        .timeline-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; color: #222; }
+        .timeline-slider { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: #ddd; outline: none; cursor: pointer; }
+        .timeline-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #5856d6; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+        .timeline-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #666; padding: 0 5px; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 100; backdrop-filter: blur(2px); }
+        .modal-box { background: white; border-radius: 14px; width: 360px; box-shadow: 0 15px 35px rgba(0,0,0,0.25); border: 1px solid #ddd; overflow: hidden;}
+        .modal-content { padding: 25px 20px; text-align: center; color: #333; font-size: 15px; }
+        .modal-btn { width: 100%; padding: 14px; border: none; background: transparent; color: #007aff; font-size: 16px; font-weight: bold; cursor: pointer; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div class="control-panel">
+        <h1 class="panel-title">IoT Control Panel</h1>
+        
+        <button class="btn-generate" onclick="triggerHardwareGeneration()">
+            ⚡ Auto-Generate Hardware Model
+        </button>
+
+        <button id="simBtn" class="btn-sim" onclick="toggleSimulationMode()">
+            🕒 Start Dynamic Water Loop Simulation
+        </button>
+
+        <button class="btn-refill" onclick="smartRefillWater()">
+            💧 Smart Refill (Based on Soil)
+        </button>
+        
+        <div class="vacation-box">
+            <label style="font-weight: bold; font-size: 13px; color: #b26a00;">🌴 Long Vacation Resource Estimator</label>
+            <button class="btn-predict" onclick="calculateVacationAutonomy()">📊 Predict Water Sustainability</button>
+            <div id="predictResultText" class="predict-result">Ready to analyze system endurance...</div>
+        </div>
+
+        <div class="form-group">
+            <label>Water Reservoir Volume (L):</label>
+            <input type="number" id="waterInput" value="12" min="0" max="20" oninput="manualUpdate()">
+            <div id="waterStatusText" class="water-status">🟢 Reservoir: Water Level OK</div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">📊 Live Water Vol Bar Chart</div>
+            <div class="bar-wrapper">
+                <div id="chartBarFill" class="bar-fill"></div>
+                <div id="chartBarText" class="bar-text">12.0L / 20L</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Soil Sensor Moisture (%):</label>
+            <input type="number" id="humidityInput" value="100" min="0" max="100" oninput="manualUpdate()">
+        </div>
+
+        <div class="form-group">
+            <div class="status-indicator">
+                <span id="pumpLed">🟢</span> <span id="pumpStatusText">Submersible Pump: Standby</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="canvas-container" id="canvas3d">
+        <div id="canvas-tip">💡 3D Physical Model (Drag to Rotate / Scroll to Zoom)</div>
+        
+        <div id="info-overlay">
+            <strong>📊 Live IoT Telemetry</strong><br>
+            <hr style="border:0; border-top:1px solid #ccc; margin:5px 0;">
+            Status: <span id="telemetryStatus" style="color:#5856d6;">Monitoring</span><br>
+            Soil Moisture: <span id="telemetryMoisture">100%</span><br>
+            Pump State: <span id="telemetryPump" style="color:#34c759;">OFF</span>
+        </div>
+
+        <div id="timeline-container">
+            <div class="timeline-header">
+                <span>🕒 24H Operation Timeline Controller</span>
+                <span id="timelineTimeText" style="color:#5856d6; font-family:monospace;">06:00</span>
+            </div>
+            <input type="range" id="timeSlider" class="timeline-slider" min="360" max="1440" step="15" value="360" oninput="onTimelineSliderMove()">
+            <div class="timeline-labels">
+                <span>06:00 (Morning)</span>
+                <span>12:00 (Noon)</span>
+                <span>18:00 (Evening)</span>
+                <span>24:00 (Midnight)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="alertModal">
+        <div class="modal-box">
+            <div class="modal-content">
+                <strong>🚨 System Intercepted!</strong><br><br>
+                Reservoir water volume is completely empty (0L).<br>Pump dry-run protection triggered!
+            </div>
+            <button class="modal-btn" onclick="closeModal()">OK</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Scene Setup ---
+        const container = document.getElementById('canvas3d');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f7fa);
+        
+        const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(7, 6, 9); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        scene.add(ambientLight);
+
+        let waterMesh, greenLED, redLED, pipeCurve;
+        let waterFlowParticles = [];
+        const particleCount = 25;
+        
+        let isPumpActive = false;
+        let targetWaterScaleY = 1.0;
+        let targetWaterPositionY = 0.1;
+        let plantMeshes = []; 
+
+        let isSimulationMode = false;
+        let loopTimer = null;
+        let isDrippingCycle = false;
+
+        function createModelMesh(geometry, fillColor, outlineScale = 1.02) {
+            const group = new THREE.Group();
+            const mainMat = new THREE.MeshBasicMaterial({ color: fillColor, side: THREE.DoubleSide });
+            const mainMesh = new THREE.Mesh(geometry, mainMat);
+            group.add(mainMesh);
+            const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+            const outlineMesh = new THREE.Mesh(geometry, outlineMat);
+            outlineMesh.scale.multiplyScalar(outlineScale);
+            group.add(outlineMesh);
+            return group;
+        }
+
+        // --- 2. Build 3D Components ---
+        const tankGeo = new THREE.BoxGeometry(2.6, 2.6, 2.6);
+        const edges = new THREE.EdgesGeometry(tankGeo);
+        const tankOutline = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+        const tankFloor = createModelMesh(new THREE.BoxGeometry(2.6, 0.05, 2.6), 0xe1e8f0);
+        tankFloor.position.y = -1.3;
+        const tankGroup = new THREE.Group();
+        tankGroup.add(tankOutline, tankFloor);
+        tankGroup.position.set(-2.6, 0.5, 0);
+        scene.add(tankGroup);
+
+        waterMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), new THREE.MeshBasicMaterial({ color: 0x4adcff, transparent: true, opacity: 0.55 }));
+        waterMesh.position.set(-2.6, 0.1, 0);
+        scene.add(waterMesh);
+
+        const pump = createModelMesh(new THREE.BoxGeometry(0.7, 0.7, 0.9), 0x4a4a4a);
+        pump.position.set(-2.6, -0.5, 0);
+        scene.add(pump);
+
+        greenLED = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.4), new THREE.MeshBasicMaterial({ color: 0x00ff00 })); greenLED.position.set(-3.9, 0.8, 0.4);
+        redLED = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.4), new THREE.MeshBasicMaterial({ color: 0x550000 })); redLED.position.set(-3.9, 0.3, 0.4);
+        scene.add(greenLED, redLED);
+
+        const pot = createModelMesh(new THREE.CylinderGeometry(1.4, 1.0, 2.0, 32), 0xd2b48c); pot.position.set(2.5, -0.3, 0);
+        const soil = createModelMesh(new THREE.CylinderGeometry(1.35, 1.35, 0.15, 32), 0x5c4033); soil.position.set(2.5, 0.65, 0);
+        scene.add(pot, soil);
+
+        const sensorProbe = createModelMesh(new THREE.BoxGeometry(0.15, 0.6, 0.1), 0x333333);
+        sensorProbe.position.set(2.0, 0.8, 0.4);
+        scene.add(sensorProbe);
+
+        const plantGroup = new THREE.Group();
+        plantGroup.position.set(2.5, 0.7, 0);
+        const mainStem = createModelMesh(new THREE.CylinderGeometry(0.04, 0.07, 1.4, 16), 0x27ae60); mainStem.position.y = 0.7;
+        plantGroup.add(mainStem); plantMeshes.push(mainStem.children[0]);
+
+        const leafGeometry = new THREE.SphereGeometry(0.28, 32, 32); leafGeometry.scale(1.6, 0.15, 0.8);
+        const leafConfig = [{ y: 0.4, rotY: 0, rotZ: 0.5, size: 1.1 }, { y: 0.7, rotY: Math.PI, rotZ: 0.6, size: 1.0 }, { y: 1.1, rotY: 2.5, rotZ: 0.4, size: 0.8 }];
+        leafConfig.forEach(cfg => {
+            const leafMesh = createModelMesh(leafGeometry, 0x2ecc71, 1.05);
+            leafMesh.position.set(0, cfg.y, 0); leafMesh.rotation.set(0.2, cfg.rotY, cfg.rotZ);
+            leafMesh.scale.multiplyScalar(cfg.size);
+            plantGroup.add(leafMesh); plantMeshes.push(leafMesh.children[0]);
+        });
+        scene.add(plantGroup);
+
+        const controller = createModelMesh(new THREE.BoxGeometry(1.4, 0.15, 1.1), 0x333333);
+        controller.position.set(1.0, 3.2, -1.5);
+        scene.add(controller);
+
+        pipeCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(-2.6, -0.5, 0), new THREE.Vector3(-2.6, 1.8, 0), new THREE.Vector3(0, 2.2, -0.4), new THREE.Vector3(2.5, 1.2, 0)]);
+        scene.add(createModelMesh(new THREE.TubeGeometry(pipeCurve, 64, 0.05, 12, false), 0xe1e8f0, 1.05));
+
+        for (let i = 0; i < particleCount; i++) {
+            const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00bfff }));
+            scene.add(pMesh); waterFlowParticles.push({ mesh: pMesh, progress: (i / particleCount) });
+        }
+
+        const pumpWireCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(-2.6,-0.5,-0.2), new THREE.Vector3(-2.6,2.5,-1.0), new THREE.Vector3(0.6,3.2,-1.5)]);
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(pumpWireCurve, 32, 0.02, 8, false), new THREE.MeshBasicMaterial({ color: 0x555555 })));
+        const sensorWireCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(2.0,0.9,0.4), new THREE.Vector3(1.8,2.2,-0.5), new THREE.Vector3(1.2,3.2,-1.5)]);
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(sensorWireCurve, 32, 0.015, 8, false), new THREE.MeshBasicMaterial({ color: 0xdddddd })));
+
+
+        // --- 3. Core Logic & Bar Chart ---
+        function evaluateSystemLogic() {
+            const waterLvl = parseFloat(document.getElementById('waterInput').value);
+            const humidity = parseFloat(document.getElementById('humidityInput').value);
+            const statusText = document.getElementById('waterStatusText');
+            const pumpStatusText = document.getElementById('pumpStatusText');
+            const pumpLed = document.getElementById('pumpLed');
+
+            // 📊 實時動態更新 Bar Chart 柱狀圖
+            const maxCapacity = 20; 
+            const percentage = (waterLvl / maxCapacity) * 100;
+            const barFill = document.getElementById('chartBarFill');
+            barFill.style.width = `${Math.max(0, Math.min(percentage, 100))}%`;
+            document.getElementById('chartBarText').innerHTML = `${waterLvl.toFixed(1)}L / ${maxCapacity}L`;
+            
+            if (waterLvl <= 2) barFill.style.backgroundColor = '#ff3b30'; // 紅色警告
+            else barFill.style.backgroundColor = '#007aff'; // 正常藍色
+
+            if (waterLvl <= 0) {
+                statusText.innerHTML = "🚨 Reservoir EMPTY! System Locked.";
+                statusText.className = "water-status alert";
+                pumpStatusText.innerHTML = "Submersible Pump: LOCKED";
+                pumpLed.innerHTML = "🔴";
+                targetWaterScaleY = 0.01; targetWaterPositionY = -0.8;
+                greenLED.material.color.setHex(0x005500); redLED.material.color.setHex(0xff0000);   
+                isPumpActive = false; isDrippingCycle = false;
+                plantMeshes.forEach((mesh, idx) => mesh.material.color.setHex(idx===0 ? 0xb8860b : 0xd4a373));
+                if (isSimulationMode) {
+                    toggleSimulationMode();
+                    document.getElementById('alertModal').style.display = 'flex';
+                }
+                updateLabels();
+                return;
+            }
+
+            statusText.innerHTML = "🟢 Reservoir: Water Level OK";
+            statusText.className = "water-status";
+            let calculatedScale = Math.min(waterLvl / 12.0, 1.2); 
+            targetWaterScaleY = calculatedScale;
+            targetWaterPositionY = 0.1 - (1.0 - calculatedScale) * 0.9;
+            greenLED.material.color.setHex(0x00ff00); redLED.material.color.setHex(0x550000);
+
+            if (humidity <= 40) isDrippingCycle = true;
+            else if (humidity >= 90) isDrippingCycle = false;
+
+            if (isDrippingCycle) {
+                isPumpActive = true;
+                pumpStatusText.innerHTML = "Submersible Pump: Dripping... 💧";
+                pumpLed.innerHTML = "⚡";
+            } else {
+                isPumpActive = false;
+                pumpStatusText.innerHTML = "Submersible Pump: Standby";
+                pumpLed.innerHTML = "🟢";
+            }
+            updateLabels();
+        }
+
+        function manualUpdate() {
+            let h = parseFloat(document.getElementById('humidityInput').value);
+            if (h > 100) document.getElementById('humidityInput').value = 100;
+            if (h < 0) document.getElementById('humidityInput').value = 0;
+            let w = parseFloat(document.getElementById('waterInput').value);
+            if (w > 20) document.getElementById('waterInput').value = 20;
+            if (w < 0) document.getElementById('waterInput').value = 0;
+            evaluateSystemLogic();
+        }
+
+        function updateLabels() {
+            document.getElementById('telemetryMoisture').innerHTML = document.getElementById('humidityInput').value + "%";
+            document.getElementById('telemetryPump').innerHTML = isPumpActive ? "ON" : "OFF";
+            document.getElementById('telemetryPump').style.color = isPumpActive ? "#007aff" : "#34c759";
+            document.getElementById('telemetryStatus').innerHTML = isSimulationMode ? "Simulating" : "Monitoring";
+        }
+
+        // --- 🌴 4. NEW: 長假期水量可維持天數估算演算法 ---
+        function calculateVacationAutonomy() {
+            const waterLvl = parseFloat(document.getElementById('waterInput').value);
+            const resultDisplay = document.getElementById('predictResultText');
+
+            if (waterLvl <= 0) {
+                resultDisplay.innerHTML = "❌ 0L available. System cannot sustain any days! Please refill immediately.";
+                resultDisplay.style.color = "#ff3b30";
+                return;
+            }
+
+            // 運算模型：
+            // 假設植物每天因為自然蒸發，平均需要進行 2.5 次的補水循環。
+            // 每次由 40% 補到 90% 會消耗大約 1.8L 嘅水。
+            // 每日總消耗量 = 2.5 * 1.8L = 4.5L / 天
+            const dailyConsumptionRate = 2.5; 
+            const totalDaysSustainable = waterLvl / dailyConsumptionRate;
+
+            if (totalDaysSustainable >= 7) {
+                // 水量充足，可應付大於一星期的假期
+                resultDisplay.innerHTML = `✅ Eco-Safe! Your current water can sustain <b>${totalDaysSustainable.toFixed(1)} days</b>.<br>Perfect for a long vacation!`;
+                resultDisplay.style.color = "#28a745";
+            } else {
+                // 水量不足一星期，發出黃色注意警告
+                resultDisplay.innerHTML = `⚠️ Attention: Only <b>${totalDaysSustainable.toFixed(1)} days</b> of water remaining.<br>It might NOT be enough for a 7-day vacation!`;
+                resultDisplay.style.color = "#b26a00";
+            }
+        }
+
+        // --- 🕒 5. Timeline Slider Controls ---
+        function onTimelineSliderMove() {
+            const totalMinutes = parseInt(document.getElementById('timeSlider').value);
+            const hour = Math.floor(totalMinutes / 60);
+            const minute = totalMinutes % 60;
+            document.getElementById('timelineTimeText').innerHTML = (hour < 10 ? "0" + hour : hour) + ":" + (minute === 0 ? "00" : minute);
+
+            if (hour >= 6 && hour < 9) {
+                scene.background.setHex(0xffebdb); ambientLight.color.setHex(0xffd2bd); ambientLight.intensity = 0.8;
+            } else if (hour >= 9 && hour < 16) {
+                scene.background.setHex(0xf5f7fa); ambientLight.color.setHex(0xffffff); ambientLight.intensity = 1.2;
+            } else if (hour >= 16 && hour < 19) {
+                scene.background.setHex(0xfff0e0); ambientLight.color.setHex(0xffaa66); ambientLight.intensity = 0.85;
+            } else {
+                scene.background.setHex(0x111625); ambientLight.color.setHex(0x556699); ambientLight.intensity = 0.35;
+            }
+        }
+
+        function toggleSimulationMode() {
+            const btn = document.getElementById('simBtn');
+            const slider = document.getElementById('timeSlider');
+            isSimulationMode = !isSimulationMode;
+            
+            if (isSimulationMode) {
+                btn.innerHTML = "⏸️ Pause Simulation";
+                btn.classList.add('active');
+                loopTimer = setInterval(() => {
+                    let val = parseInt(slider.value) + 15;
+                    if (val > 1440) val = 360;
+                    slider.value = val;
+                    onTimelineSliderMove();
+
+                    let currentHum = parseFloat(document.getElementById('humidityInput').value);
+                    let currentWater = parseFloat(document.getElementById('waterInput').value);
+
+                    if (isPumpActive) {
+                        currentHum += 4; currentWater -= 0.3;
+                        if (currentHum > 90) currentHum = 90; 
+                    } else {
+                        currentHum -= 1.5;
+                        if (currentHum < 0) currentHum = 0;
+                    }
+                    if (currentWater < 0) currentWater = 0;
+
+                    document.getElementById('humidityInput').value = Math.round(currentHum);
+                    document.getElementById('waterInput').value = currentWater.toFixed(1);
+                    evaluateSystemLogic();
+                }, 120);
+            } else {
+                btn.innerHTML = "🕒 Start Dynamic Water Loop Simulation";
+                btn.classList.remove('active');
+                clearInterval(loopTimer);
+                evaluateSystemLogic();
+            }
+        }
+
+        function smartRefillWater() {
+            let currentHum = parseFloat(document.getElementById('humidityInput').value);
+            let calculatedRefill = 5.0 + ((100 - currentHum) * 0.12); 
+            let currentWater = parseFloat(document.getElementById('waterInput').value);
+            document.getElementById('waterInput').value = Math.min(currentWater + calculatedRefill, 20).toFixed(1);
+            evaluateSystemLogic();
+        }
+
+        function triggerHardwareGeneration() { alert("⚡ Hardware Re-Aligned!"); }
+        function closeModal() { document.getElementById('alertModal').style.display = 'none'; evaluateSystemLogic(); }
+
+        evaluateSystemLogic();
+        onTimelineSliderMove();
+
+        // --- 6. Frame Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            waterMesh.scale.y += (targetWaterScaleY - waterMesh.scale.y) * 0.05;
+            waterMesh.position.y += (targetWaterPositionY - waterMesh.position.y) * 0.05;
+
+            waterFlowParticles.forEach(p => {
+                if (isPumpActive) {
+                    p.mesh.visible = true; p.progress += 0.008; if (p.progress > 1) p.progress = 0;
+                    p.mesh.position.copy(pipeCurve.getPointAt(p.progress)); 
+                } else { p.mesh.visible = false; }
+            });
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>
